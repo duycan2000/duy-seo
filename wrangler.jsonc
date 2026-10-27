@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "duy-seo",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/hooks/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "duy-seo",
+      // Replace with the id printed by: npx wrangler d1 create duy-seo
+      "database_id": "63948d29-e2ab-4fba-ac22-1ae584d8d3e3"
+    }
+  ],
+  // Workers AI — embeddings for semantic keyword clustering (@cf/baai/bge-m3)
+  "ai": { "binding": "AI" },
+  // Every 15 minutes: queue due checks + collect finished DataForSEO tasks.
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "vars": {
+    // "standard" = cheaper queued tasks for scheduled checks (results in ~1-45 min)
+    // "live" = instant but ~3x cost
+    "DFS_MODE": "standard"
+  }
+  // Secrets (set with `npx wrangler secret put NAME`):
+  //   DFS_LOGIN, DFS_PASSWORD, ADMIN_PASSWORD, SESSION_SECRET
+}

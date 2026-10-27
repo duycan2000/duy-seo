@@ -1,0 +1,6 @@
+DFS_LOGIN=your-dataforseo-login
+DFS_PASSWORD=your-dataforseo-api-password
+ADMIN_PASSWORD=choose-a-password
+SESSION_SECRET=any-long-random-string
+DFS_MODE=standard
+# DFS_SANDBOX=1
