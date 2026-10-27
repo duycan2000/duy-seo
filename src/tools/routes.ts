@@ -11,7 +11,7 @@ import { addHost, deleteHost, listHosts, submit, verifyHost } from "./indexnow";
 const t = new Hono<{ Bindings: Env }>();
 const lines = (v: unknown) => (Array.isArray(v) ? v.map(String) : String(v || "").split(/\r?\n/)).map((s) => s.trim()).filter(Boolean);
 const loc = (b: any): Loc => ({
-  ...(b.location_name ? { location_name: String(b.location_name) } : { location_code: Number(b.location_code) || 2704 }),
+  ...(b.city_name ? { location_name: String(b.city_name) } : b.location_name ? { location_name: String(b.location_name) } : { location_code: Number(b.location_code) || 2036 }),
   language_code: b.language_code || "en", device: b.device === "mobile" ? "mobile" : "desktop",
 });
 /** "keyword<TAB or comma>volume" lines → rows */
@@ -63,7 +63,7 @@ t.post("/bulk-keywords", async (c) => {
   const b = await c.req.json<any>();
   const list = lines(b.keywords);
   if (!list.length) return c.json({ error: "Paste at least one keyword." }, 400);
-  return c.json(await bulkKeywordMetrics(c.env, list, Number(b.location_code) || 2704, b.language_code || "en"));
+  return c.json(await bulkKeywordMetrics(c.env, list, Number(b.location_code) || 2036, b.language_code || "en", Number(b.city_code) || undefined));
 });
 t.post("/autocomplete", async (c) => {
   const b = await c.req.json<any>();

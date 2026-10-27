@@ -22,7 +22,7 @@ const lines = (s) => String(s || "").split(/\r?\n/).map((x) => x.trim()).filter(
 const head = (title, sub, actions = "") => `<div class="page-head"><div><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ""}</div><div class="spacer"></div>${actions}</div>`;
 const locFields = (opts = {}) => {
   const L = S().state.loc;
-  return `<label class="f">Location${S().locSelect("location_code", L.location_code)}</label><label class="f">Language${S().langSelect("language_code", L.language_code)}</label>${opts.device ? `<label class="f">Device<select name="device"><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select></label>` : ""}`;
+  return `<label class="f">Location${S().locSelect("location_code", L.location_code)}</label><label class="f">Language${S().langSelect("language_code", L.language_code)}</label>${opts.city ? S().cityField() : ""}${opts.device ? `<label class="f">Device<select name="device"><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select></label>` : ""}`;
 };
 const form = (el) => Object.fromEntries(new FormData(el));
 const empty = (t, p) => `<div class="empty"><h3>${t}</h3>${p ? `<p>${p}</p>` : ""}</div>`;
@@ -294,7 +294,7 @@ function pageBulkKeywords() {
   sessionStorage.removeItem("bulkKeywords");
   mount(`${head("Bulk Keyword Analysis", "Volume, CPC, difficulty and intent for up to 1,000 keywords at once.")}
     <form class="panel" id="bk"><label class="f">Keywords, one per line<textarea name="keywords" style="min-height:160px" placeholder="roof repairs brisbane\nemergency roof repair">${esc(pre)}</textarea></label>
-      <div class="row end" style="margin-top:12px">${locFields()}<span class="muted small" id="bkc"></span><div class="spacer"></div><button class="btn primary">Get metrics</button></div></form><div id="br"></div>`);
+      <div class="row end" style="margin-top:12px">${locFields({ city: true })}<span class="muted small" id="bkc"></span><div class="spacer"></div><button class="btn primary">Get metrics</button></div></form><div id="br"></div>`);
   const ta = $("#bk").keywords;
   const count = () => ($("#bkc").textContent = `${lines(ta.value).length} keywords`);
   ta.oninput = count; count();
@@ -319,7 +319,7 @@ function pagePaa() {
   const { mount, $, esc, api, busy, downloadCsv } = S();
   mount(`${head("Bulk Google PAA", "Collect “People also ask” questions for many keywords, expanding up to four layers deep.")}
     <form class="panel" id="pf"><label class="f">Keywords, one per line (up to 50)<textarea name="keywords" style="min-height:120px" placeholder="how to fix a leaking roof\nroof restoration cost"></textarea></label>
-      <div class="row end" style="margin-top:12px">${locFields({ device: true })}<label class="f">Depth<select name="depth"><option value="1">1 layer</option><option value="2" selected>2 layers</option><option value="3">3 layers</option><option value="4">4 layers</option></select></label><span class="muted small">≈ $0.002 + $0.00015 per extra layer, per keyword</span><div class="spacer"></div><button class="btn primary">Get questions</button></div></form><div id="pr"></div>`);
+      <div class="row end" style="margin-top:12px">${locFields({ device: true, city: true })}<label class="f">Depth<select name="depth"><option value="1">1 layer</option><option value="2" selected>2 layers</option><option value="3">3 layers</option><option value="4">4 layers</option></select></label><span class="muted small">≈ $0.002 + $0.00015 per extra layer, per keyword</span><div class="spacer"></div><button class="btn primary">Get questions</button></div></form><div id="pr"></div>`);
   $("#pf").onsubmit = (e) => {
     e.preventDefault();
     const f = form(e.target); setLoc(f);
@@ -408,7 +408,7 @@ async function pageSerpCluster(id) {
   const jobs = await api("GET", "/tools/serp-cluster");
   mount(`${head("SERP Clustering", "Group keywords by the pages Google ranks for them — the most reliable way to plan one page per intent.")}
     <form class="panel" id="scf"><label class="f">Keywords, one per line — optionally “keyword, volume” (up to 1,000)<textarea name="keywords" style="min-height:150px" placeholder="roof repair brisbane, 720\nroof repairs brisbane, 590">${esc(pre)}</textarea></label>
-      <div class="row end" style="margin-top:12px"><input name="name" placeholder="Run name (optional)" style="width:200px">${locFields({ device: true })}<label class="f">Reuse SERPs fetched within<select name="reuse_days"><option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option></select></label><span class="muted small">≈ $0.0006 per new SERP</span><div class="spacer"></div><button class="btn primary">Start clustering</button></div></form>
+      <div class="row end" style="margin-top:12px"><input name="name" placeholder="Run name (optional)" style="width:200px">${locFields({ device: true, city: true })}<label class="f">Reuse SERPs fetched within<select name="reuse_days"><option value="7">7 days</option><option value="14" selected>14 days</option><option value="30">30 days</option></select></label><span class="muted small">≈ $0.0006 per new SERP</span><div class="spacer"></div><button class="btn primary">Start clustering</button></div></form>
     <div class="panel"><div class="panel-head"><h2>Runs</h2></div>${jobs.length ? `<div class="tbl-wrap"><table><thead><tr><th>Run</th><th class="num">Keywords</th><th>Status</th><th>Started</th><th></th></tr></thead><tbody>${jobs.map((j) => `<tr class="clickable" data-go="#/t/serp-cluster/${j.id}"><td><b>${esc(j.name)}</b></td><td class="num">${j.keywords}</td><td>${j.status === "done" ? `<span class="badge ok">done</span>` : `<span class="badge plain">collecting</span>`}</td><td class="small muted">${ago(j.created_at)}</td><td class="num"><button class="btn ghost sm danger" data-del="${j.id}" aria-label="Delete run">✕</button></td></tr>`).join("")}</tbody></table></div>` : empty("No runs yet")}</div>`);
   $("#scf").onsubmit = (e) => {
     e.preventDefault();
@@ -429,7 +429,7 @@ function pageSerpSimilarity() {
   const { mount, $, esc, api, busy } = S();
   mount(`${head("SERP Similarity", "Do these keywords need one page or separate pages? Compare their top 10 results.")}
     <form class="panel" id="ssf"><label class="f">2 to 6 keywords, one per line<textarea name="keywords" style="min-height:110px" placeholder="roof repair brisbane\nroof restoration brisbane"></textarea></label>
-      <div class="row end" style="margin-top:12px">${locFields({ device: true })}<div class="spacer"></div><button class="btn primary">Compare SERPs</button></div></form><div id="ssr"></div>`);
+      <div class="row end" style="margin-top:12px">${locFields({ device: true, city: true })}<div class="spacer"></div><button class="btn primary">Compare SERPs</button></div></form><div id="ssr"></div>`);
   $("#ssf").onsubmit = (e) => {
     e.preventDefault();
     const f = form(e.target); setLoc(f);

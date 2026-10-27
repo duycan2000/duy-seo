@@ -52,12 +52,41 @@ async function busy(btn, fn, label) {
 }
 
 const LOCATIONS = [
-  [2704, "Vietnam"], [2840, "United States"], [2826, "United Kingdom"], [2036, "Australia"], [2124, "Canada"],
-  [2702, "Singapore"], [2764, "Thailand"], [2392, "Japan"], [2410, "South Korea"], [2276, "Germany"], [2250, "France"],
-  [2158, "Taiwan"], [2344, "Hong Kong"], [2458, "Malaysia"], [2608, "Philippines"], [2360, "Indonesia"], [2356, "India"],
+  [2036, "Australia", "au"], [2554, "New Zealand", "nz"], [2704, "Vietnam", "vn"], [2840, "United States", "us"], [2826, "United Kingdom", "gb"], [2124, "Canada", "ca"],
+  [2702, "Singapore", "sg"], [2764, "Thailand", "th"], [2392, "Japan", "jp"], [2410, "South Korea", "kr"], [2276, "Germany", "de"], [2250, "France", "fr"],
+  [2158, "Taiwan", "tw"], [2344, "Hong Kong", "hk"], [2458, "Malaysia", "my"], [2608, "Philippines", "ph"], [2360, "Indonesia", "id"], [2356, "India", "in"],
 ];
 const LANGS = [["en", "English"], ["vi", "Vietnamese"], ["ko", "Korean"], ["ja", "Japanese"], ["zh-TW", "Chinese (Trad.)"], ["th", "Thai"], ["de", "German"], ["fr", "French"]];
 const locName = (code) => (LOCATIONS.find((l) => l[0] === Number(code)) || [0, "Location " + code])[1];
+
+/** Optional city/region picker inside the selected country. Fills hidden city_code + city_name (Google canonical name). */
+const cityField = () => `<label class="f city-f">City / region<input name="city" list="cityList" placeholder="Whole country" autocomplete="off"><datalist id="cityList"></datalist><input type="hidden" name="city_code"><input type="hidden" name="city_name"></label>`;
+function wireCity(form) {
+  const inp = form.querySelector("[name=city]"), sel = form.querySelector("[name=location_code]");
+  if (!inp || !sel || inp.dataset.wired) return;
+  inp.dataset.wired = 1;
+  const dl = form.querySelector("datalist"), code = form.querySelector("[name=city_code]"), nm = form.querySelector("[name=city_name]");
+  let list = [], t;
+  const iso = () => (LOCATIONS.find((l) => l[0] === +sel.value) || [])[2];
+  const sync = () => { const m = list.find((l) => l.n === inp.value); code.value = m ? m.c : ""; nm.value = m ? m.n : ""; };
+  const load = () => {
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      if (!iso()) return;
+      list = (await api("GET", `/tools/locations?country=${iso()}&q=${encodeURIComponent(inp.value.trim())}`).catch(() => [])).filter((l) => l.t !== "Country");
+      dl.innerHTML = list.map((l) => `<option value="${esc(l.n)}">${esc(l.t)}</option>`).join("");
+      sync();
+    }, 250);
+  };
+  const reset = () => { inp.value = ""; list = []; dl.innerHTML = ""; sync(); inp.disabled = !iso(); inp.placeholder = iso() ? "Whole country" : "—"; };
+  inp.addEventListener("input", () => { sync(); load(); });
+  inp.addEventListener("focus", () => { if (!list.length) load(); }, { once: false });
+  sel.addEventListener("change", reset);
+  form.addEventListener("submit", (e) => {
+    if (inp.value.trim() && !code.value) { e.preventDefault(); e.stopImmediatePropagation(); toast("Pick the city from the suggestion list, or clear it to use the whole country."); }
+  }, true);
+  reset();
+}
 const locSelect = (name, val) => `<select name="${name}">${LOCATIONS.map(([c, l]) => `<option value="${c}" ${Number(val) === c ? "selected" : ""}>${l}</option>`).join("")}</select>`;
 const langSelect = (name, val) => `<select name="${name}">${LANGS.map(([c, l]) => `<option value="${c}" ${val === c ? "selected" : ""}>${l}</option>`).join("")}</select>`;
 const ENGINES = [["google", "Google"], ["bing", "Bing"], ["ai_overview", "AI Overviews"], ["ai_mode", "AI Mode"]];
@@ -138,14 +167,15 @@ function renderLogin() {
       <ul><li>Google, Bing, AI Overviews, AI Mode and ChatGPT</li><li>Local map grids and site audits</li><li>Rank &amp; Rent portfolio, leads and alerts</li></ul></div>
       <span class="small" style="color:#6E7A90">Powered by DataForSEO</span></div>
     <div class="login-form"><form id="lf">
-      <h1>Sign in</h1><p class="muted">Enter your admin password to continue.</p>
-      <label class="f">Password<input type="password" name="password" autocomplete="current-password" required autofocus></label>
+      <h1>Sign in</h1><p class="muted">Team members use their email. The owner leaves email empty.</p>
+      <label class="f">Email<input type="email" name="email" autocomplete="username" placeholder="you@example.com" autofocus></label>
+      <label class="f">Password<input type="password" name="password" autocomplete="current-password" required></label>
       <button class="btn primary" type="submit">Sign in</button>
       <div class="err" id="lerr" role="alert"></div></form></div></div>`;
   $("#lf").onsubmit = async (e) => {
     e.preventDefault();
     try {
-      await api("POST", "/login", { password: e.target.password.value });
+      await api("POST", "/login", { email: e.target.email.value, password: e.target.password.value });
       start();
     } catch (err) { $("#lerr").textContent = err.message; }
   };
@@ -184,6 +214,7 @@ const ICON = {
   pin: '<path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>',
   db: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
   zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
 };
 const icon = (k, cls = "ic") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k] || ""}</svg>`;
 
@@ -200,7 +231,7 @@ const NAV = [
   { id: "serp", label: "SERP Research", items: [["#/t/serp-similarity", "t-serp-similarity", "copy", "SERP Similarity"], ["#/t/uule", "t-uule", "pin", "SERP UULE"]] },
   { id: "gsc", label: "Search Console", items: [["#/t/gsc", "t-gsc", "db", "Sites"]] },
   { id: "rr", label: "Rank & Rent", items: [["#/rr", "rr", "grid", "Portfolio"], ["#/rr/market", "rr-market", "target", "Niche finder"], ["#/rr/leads", "rr-leads", "phone", "Leads"], ["#/rr/alerts", "rr-alerts", "bell", "Alerts"]] },
-  { id: "util", label: "Utilities", items: [["#/t/bulk-domains", "t-bulk-domains", "stack", "Bulk Domain Analysis"], ["#/t/indexnow", "t-indexnow", "zap", "IndexNow"], ["#/usage", "usage", "card", "API usage"]] },
+  { id: "util", label: "Utilities", items: [["#/t/bulk-domains", "t-bulk-domains", "stack", "Bulk Domain Analysis"], ["#/t/indexnow", "t-indexnow", "zap", "IndexNow"], ["#/usage", "usage", "card", "API usage"], ["#/users", "users", "users", "Users"]] },
 ];
 const navFind = (key) => { for (const g of NAV) for (const it of g.items) if (it[1] === key) return { g, it }; return null; };
 let navOpen;
@@ -208,7 +239,7 @@ try { navOpen = new Set(JSON.parse(localStorage.getItem("navOpen") || '["client"
 const saveNav = () => { try { localStorage.setItem("navOpen", JSON.stringify([...navOpen])); } catch {} };
 
 /** Shared search location for research tools (topbar selector). */
-state.loc = (() => { try { return JSON.parse(localStorage.getItem("loc")) || { location_code: 2704, language_code: "en" }; } catch { return { location_code: 2704, language_code: "en" }; } })();
+state.loc = (() => { try { return JSON.parse(localStorage.getItem("loc")) || { location_code: 2036, language_code: "en" }; } catch { return { location_code: 2036, language_code: "en" }; } })();
 
 /** Section a route belongs to, used for nav highlight and breadcrumbs. */
 function where() {
@@ -219,6 +250,8 @@ function where() {
   if (p[0] === "p") return { key: "projects", pid: +p[1], crumbs: [["Client SEO", "#/projects"], [proj ? proj.name : "Project"]] };
   if (p[0] === "research") return p[1] === "keywords" ? { key: "kwr", crumbs: [["Keyword Research"], ["Keyword Explorer"]] } : { key: "t-traffic", crumbs: [["Competitive Research"], ["Traffic Analytics"]] };
   if (p[0] === "usage") return { key: "usage", crumbs: [["Utilities"], ["API usage"]] };
+  if (p[0] === "users") return { key: "users", crumbs: [["Utilities"], ["Users"]] };
+  if (p[0] === "account") return { key: "account", crumbs: [["My account"]] };
   if (p[0] === "t") {
     const f = navFind("t-" + p[1]);
     const extra = p[2] ? [[decodeURIComponent(p[2])]] : [];
@@ -240,7 +273,8 @@ function shell(content) {
   const projs = state.projects.slice(0, 6);
   const extra = (key) => key === "projects" ? `<span class="count plain">${state.projects.length}</span>` : key === "rr-alerts" && state.rrAlerts ? `<span class="count">${state.rrAlerts}</span>` : "";
   const link = ([href, key, ic, label]) => `<a href="${href}" class="${w.key === key ? "on" : ""}">${icon(ic)}<span class="name">${label}</span>${extra(key)}</a>`;
-  const groups = NAV.map((g) => {
+  const canUsers = ["owner", "admin"].includes(state.me?.user?.role);
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((it) => it[1] !== "users" || canUsers) })).map((g) => {
     const active = g.items.some((it) => it[1] === w.key);
     const open = active || navOpen.has(g.id);
     return `<div class="nav-group ${open ? "open" : ""}" data-g="${g.id}">
@@ -259,7 +293,7 @@ function shell(content) {
       ${groups}
     </nav>
     <div class="side-foot">
-      <span class="mode" title="How scheduled checks are sent to DataForSEO">${state.me?.sandbox ? "Sandbox · " : ""}${esc(state.me?.mode || "standard")} mode</span>
+      <a class="me" href="#/account" title="My account"><span class="avatar">${esc((state.me?.user?.name || "?")[0].toUpperCase())}</span><span><b>${esc(state.me?.user?.name || "")}</b><small>${esc(state.me?.user?.role || "")} · ${esc(state.me?.mode || "standard")} mode</small></span></a>
       <button class="side-btn" id="logout" title="Sign out">${icon("logout")}<span>Sign out</span></button>
     </div>
   </aside>
@@ -311,6 +345,7 @@ function mount(html) {
     const d = ds.d.value.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
     if (d) location.hash = `#/t/traffic/${encodeURIComponent(d)}/overview`;
   };
+  $$(".city-f").forEach((l) => wireCity(l.closest("form")));
   window.scrollTo(0, 0);
 }
 
@@ -367,6 +402,8 @@ async function route() {
     if (parts[0] === "research" && parts[1] === "domain") { location.hash = parts[2] ? `#/t/traffic/${parts[2]}/overview` : "#/t/traffic"; return; }
     if (parts[0] === "t" && window.TOOLS) return await window.TOOLS.route(parts.slice(1));
     if (parts[0] === "usage") return await pageUsage();
+    if (parts[0] === "users") return await pageUsers();
+    if (parts[0] === "account") return pageAccount();
     if (parts[0] === "rr" && window.RR) return await window.RR.route(parts.slice(1));
     location.hash = "#/";
   } catch (e) {
@@ -583,7 +620,7 @@ async function tabRankings(el, p) {
     const rows = kws.filter((k) => !filter || k.keyword.includes(filter) || (k.tags || "").includes(filter))
       .sort((a, b) => { const x = val(a, sortKey), y = val(b, sortKey); return (x > y ? 1 : x < y ? -1 : 0) * sortDir; });
     $("#kwt").innerHTML = rows.length ? `<table><thead><tr>
-      <th class="sortable" data-s="keyword">Keyword</th><th class="sortable num" data-s="volume">Volume</th>
+      <th class="sortable" data-s="keyword">Keyword</th><th class="sortable num" data-s="volume">${city ? locName(f.location_code) : "Volume"}</th>${city ? `<th class="sortable num" data-s="local">${esc(city)}</th>` : ""}
       ${used.map(([e, l]) => `<th class="sortable" data-s="${e}">${l}</th>`).join("")}
       <th>Ranking URL</th><th>30 days</th><th></th></tr></thead><tbody>
       ${rows.map((k) => { const g = k.data.google || k.data.bing; return `<tr>
@@ -910,29 +947,32 @@ function pageKeywordResearch() {
     <form class="panel row end" id="krf">
       <label class="f" style="flex:1;min-width:220px">Seed keyword<input name="seed" required placeholder="cocktail bar"></label>
       <label class="f">Method<select name="mode"><option value="ideas">Ideas (same topic)</option><option value="suggestions">Suggestions (contains seed)</option><option value="related">Related (“people also search”)</option></select></label>
-      <label class="f">Location${locSelect("location_code", 2704)}</label><label class="f">Language${langSelect("language_code", "en")}</label>
+      <label class="f">Country${locSelect("location_code", state.loc.location_code)}</label>${cityField()}<label class="f">Language${langSelect("language_code", "en")}</label>
       <button class="btn primary">Find keywords</button></form>
+    <p class="muted small" style="margin:0 0 16px">Keyword ideas and difficulty are country-level (DataForSEO Labs). Pick a city to add that city's Google Ads volume. Click any keyword to see its top 10 there.</p>
     <div id="krr"></div>`, "kwr");
   $("#krf").onsubmit = (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     busy(e.submitter, async () => {
       const r = await api("POST", "/research/keywords", f);
-      let rows = r.items, sk = "volume", sd = -1;
+      let rows = r.items, sk = r.city ? "local" : "volume", sd = -1;
+      const city = r.city ? r.city.split(",")[0] : "";
       const intentBadge = (i) => i ? `<span class="badge plain">${esc(i)}</span>` : "";
       const draw = () => {
         rows.sort((a, b) => ((a[sk] ?? -1) > (b[sk] ?? -1) ? 1 : -1) * sd);
-        $("#krt").innerHTML = `<table><thead><tr><th><input type="checkbox" id="all" aria-label="Select all"></th><th class="sortable" data-s="keyword">Keyword</th><th class="sortable num" data-s="volume">Volume</th><th class="sortable num" data-s="kd">Difficulty</th><th class="sortable num" data-s="cpc">CPC</th><th>Intent</th><th>12 months</th></tr></thead><tbody>
-          ${rows.map((x, i) => `<tr><td><input type="checkbox" data-i="${i}"></td><td class="kw">${esc(x.keyword)}</td><td class="num">${n(x.volume)}</td><td class="num">${x.kd ?? "—"}</td><td class="num">${x.cpc != null ? "$" + x.cpc.toFixed(2) : "—"}</td><td>${intentBadge(x.intent)}</td><td>${volSpark(x.trend)}</td></tr>`).join("")}</tbody></table>`;
+        $("#krt").innerHTML = `<table><thead><tr><th><input type="checkbox" id="all" aria-label="Select all"></th><th class="sortable" data-s="keyword">Keyword</th><th class="sortable num" data-s="volume">${city ? locName(f.location_code) : "Volume"}</th>${city ? `<th class="sortable num" data-s="local">${esc(city)}</th>` : ""}<th class="sortable num" data-s="kd">Difficulty</th><th class="sortable num" data-s="cpc">CPC</th><th>Intent</th><th>12 months</th></tr></thead><tbody>
+          ${rows.map((x, i) => `<tr><td><input type="checkbox" data-i="${i}"></td><td class="kw"><button class="linkish" data-top="${i}" title="Top 10 in ${esc(city || locName(f.location_code))}">${esc(x.keyword)}</button></td><td class="num">${n(x.volume)}</td>${city ? `<td class="num"><b>${n(x.local)}</b></td>` : ""}<td class="num">${x.kd ?? "—"}</td><td class="num">${x.cpc != null ? "$" + x.cpc.toFixed(2) : "—"}</td><td>${intentBadge(x.intent)}</td><td>${volSpark(x.trend)}</td></tr>`).join("")}</tbody></table>`;
         $$("#krt th[data-s]").forEach((th) => (th.onclick = () => { sd = sk === th.dataset.s ? -sd : -1; sk = th.dataset.s; draw(); }));
+        $$("#krt [data-top]").forEach((b) => (b.onclick = () => showTop10(rows[b.dataset.top].keyword, f)));
         $("#all").onchange = (ev) => $$("#krt [data-i]").forEach((c) => (c.checked = ev.target.checked));
       };
       if (!state.projects.length) await loadProjects();
-      $("#krr").innerHTML = `<div class="panel"><div class="panel-head"><h2>${n(r.total)} keywords</h2><span class="muted small">Showing ${rows.length}</span><div class="spacer"></div>
+      $("#krr").innerHTML = `${r.local_error ? `<div class="note err" style="margin-bottom:12px">${esc(r.local_error)}</div>` : ""}<div class="panel"><div class="panel-head"><h2>${n(r.total)} keywords</h2>${city ? `<span class="badge plain">${esc(r.city)}</span>` : ""}<span class="muted small">Showing ${rows.length}</span><div class="spacer"></div>
         ${state.projects.length ? `<select id="toProj">${state.projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select><button class="btn" id="track">Track selected</button>` : ""}
         <button class="btn ghost" id="csv">Export CSV</button></div><div class="tbl-wrap" id="krt"></div></div>`;
       draw();
-      $("#csv").onclick = () => downloadCsv(`keywords-${f.seed}.csv`, [["keyword", "volume", "kd", "cpc", "intent"], ...rows.map((x) => [x.keyword, x.volume, x.kd, x.cpc, x.intent])]);
+      $("#csv").onclick = () => downloadCsv(`keywords-${f.seed}.csv`, [["keyword", "volume", ...(city ? [city + " volume"] : []), "kd", "cpc", "intent"], ...rows.map((x) => [x.keyword, x.volume, ...(city ? [x.local] : []), x.kd, x.cpc, x.intent])]);
       const tr = $("#track");
       if (tr) tr.onclick = () => {
         const sel = $$("#krt [data-i]:checked").map((c) => rows[c.dataset.i].keyword);
@@ -942,6 +982,22 @@ function pageKeywordResearch() {
       };
     }, "Searching…");
   };
+}
+/** Drawer: top 10 for a keyword in the chosen country or city (one SERP call, cached 1 day). */
+function showTop10(keyword, f) {
+  const where = f.city_name || locName(f.location_code);
+  const d = drawer(`<div class="panel-head"><div><h2>${esc(keyword)}</h2><div class="muted small">Top 10 · ${esc(where)}</div></div><div class="spacer"></div><button class="btn ghost" data-close>Close</button></div>
+    <div class="row" style="margin:4px 0 12px"><select id="tdv"><option value="mobile">Mobile</option><option value="desktop">Desktop</option></select><span class="muted small">≈ $0.002 per fetch</span></div><div id="tdr"><p class="muted">Loading…</p></div>`);
+  const load = async () => {
+    $("#tdr", d.el).innerHTML = `<p class="muted">Loading…</p>`;
+    try {
+      const r = await api("POST", "/tools/serp-preview", { keyword, location_code: f.location_code, city_name: f.city_name || "", language_code: f.language_code, device: $("#tdv", d.el).value });
+      $("#tdr", d.el).innerHTML = `<ol class="serp-list">${r.urls.map((u) => `<li><b>${esc(u.d)}</b><a class="url" href="${esc(u.u)}" target="_blank" rel="noopener">${esc(u.t || u.u)}</a></li>`).join("") || "<li class='muted'>No organic results.</li>"}</ol>
+        <div class="feat" style="margin-top:8px">SERP features: ${esc(r.features.join(", ") || "none")}${r.fetched_at ? ` · fetched ${esc(r.fetched_at)} UTC` : ""}</div>`;
+    } catch (e) { $("#tdr", d.el).innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  };
+  $("#tdv", d.el).onchange = load;
+  load();
 }
 function volSpark(arr) {
   const v = (arr || []).filter((x) => x != null);
@@ -1000,6 +1056,70 @@ function renderDomainOverview(el, r, f) {
   });
 }
 
+// ---------------- users ----------------
+const ROLE_INFO = { admin: "Everything, including managing members and viewers", member: "Uses every tool and edits projects; can't manage users", viewer: "Read-only: sees reports, can't change anything" };
+function genPassword() {
+  const a = new Uint8Array(12); crypto.getRandomValues(a);
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  return [...a].map((x) => chars[x % chars.length]).join("");
+}
+async function pageUsers() {
+  const list = await api("GET", "/users");
+  const isOwner = state.me?.user?.role === "owner";
+  const roleOpts = (cur) => ["admin", "member", "viewer"].filter((r) => isOwner || r !== "admin").map((r) => `<option value="${r}" ${cur === r ? "selected" : ""}>${r[0].toUpperCase() + r.slice(1)}</option>`).join("");
+  mount(`<div class="page-head"><div><h1>Users</h1><div class="sub">Give teammates or friends their own login. The owner account signs in with the ADMIN_PASSWORD secret.</div></div></div>
+    <div class="panel"><div class="panel-head"><h2>Team</h2></div>
+      ${list.length ? `<div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead><tbody>
+        ${list.map((u) => `<tr><td><b>${esc(u.name || "")}</b></td><td>${esc(u.email)}</td>
+          <td>${!isOwner && u.role === "admin" ? `<span class="badge plain">admin</span>` : `<select data-role="${u.id}">${roleOpts(u.role)}</select>`}</td>
+          <td class="small muted">${u.last_login_at ? ago(u.last_login_at) : "never"}</td>
+          <td>${u.disabled ? `<span class="badge bad">disabled</span>` : `<span class="badge ok">active</span>`}</td>
+          <td class="num" style="white-space:nowrap"><button class="btn sm" data-reset="${u.id}">Reset password</button><button class="btn ghost sm" data-dis="${u.id}" data-v="${u.disabled ? 0 : 1}">${u.disabled ? "Enable" : "Disable"}</button><button class="btn ghost sm danger" data-del="${u.id}" aria-label="Delete user">✕</button></td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="empty"><p>No other users yet.</p></div>`}</div>
+    <form class="panel" id="uf"><div class="panel-head"><h2>Add a user</h2></div><div class="grid2">
+      <label class="f">Name<input name="name" placeholder="Minh"></label>
+      <label class="f">Email<input name="email" type="email" required placeholder="minh@gmail.com"></label>
+      <label class="f">Role<select name="role">${roleOpts("member")}</select><span class="muted small" id="rinfo">${ROLE_INFO.member}</span></label>
+      <label class="f">Temporary password<span class="row"><input name="password" id="upw" required minlength="8" style="flex:1"><button type="button" class="btn sm" id="gen">Generate</button></span><span class="muted small">Send it privately; they can change it under My account.</span></label>
+    </div><div class="row" style="margin-top:14px"><button class="btn primary">Add user</button></div></form>`);
+  const f = $("#uf");
+  f.role.onchange = () => ($("#rinfo").textContent = ROLE_INFO[f.role.value]);
+  $("#gen").onclick = () => { $("#upw").value = genPassword(); };
+  $("#upw").value = genPassword();
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(f));
+    busy(e.submitter, async () => {
+      await api("POST", "/users", body);
+      navigator.clipboard?.writeText(`${location.origin}\nEmail: ${body.email}\nPassword: ${body.password}`).catch(() => {});
+      toast("User added. Sign-in details copied to your clipboard.", 6000);
+      pageUsers();
+    });
+  };
+  $$("[data-role]").forEach((s) => (s.onchange = async () => { try { await api("PUT", `/users/${s.dataset.role}`, { role: s.value }); toast("Role updated"); } catch (e) { toast(e.message); pageUsers(); } }));
+  $$("[data-dis]").forEach((b) => (b.onclick = () => busy(b, async () => { await api("PUT", `/users/${b.dataset.dis}`, { disabled: b.dataset.v === "1" }); pageUsers(); })));
+  $$("[data-del]").forEach((b) => (b.onclick = async () => { if (confirm("Delete this user? They can no longer sign in.")) { await api("DELETE", `/users/${b.dataset.del}`); pageUsers(); } }));
+  $$("[data-reset]").forEach((b) => (b.onclick = () => busy(b, async () => {
+    const pw = genPassword();
+    await api("PUT", `/users/${b.dataset.reset}`, { password: pw });
+    prompt("New password — copy it and send it privately:", pw);
+  })));
+}
+
+function pageAccount() {
+  const u = state.me?.user || {};
+  mount(`<div class="page-head"><div><h1>My account</h1><div class="sub">${esc(u.email || "")} · ${esc(u.role || "")}</div></div></div>
+    ${u.role === "owner" ? `<div class="panel"><p>You're signed in as the owner. Your password is the <code>ADMIN_PASSWORD</code> secret — change it in Cloudflare → Workers &amp; Pages → duy-seo → Settings → Variables and Secrets.</p><a class="btn" href="#/users">Manage users</a></div>`
+    : `<form class="panel" id="pf" style="max-width:480px"><div class="panel-head"><h2>Change password</h2></div><div class="stack">
+      <label class="f">Current password<input type="password" name="current" required autocomplete="current-password"></label>
+      <label class="f">New password<input type="password" name="next" required minlength="8" autocomplete="new-password"></label>
+      <button class="btn primary">Change password</button></div></form>`}
+    <div class="panel"><button class="btn danger" id="lo">Sign out</button></div>`);
+  const pf = $("#pf");
+  if (pf) pf.onsubmit = (e) => { e.preventDefault(); busy(e.submitter, async () => { await api("POST", "/me/password", Object.fromEntries(new FormData(pf))); toast("Password changed"); pf.reset(); }); };
+  $("#lo").onclick = async () => { await api("POST", "/logout"); renderLogin(); };
+}
+
 // ---------------- usage ----------------
 async function pageUsage() {
   if (!state.projects.length) await loadProjects();
@@ -1018,7 +1138,7 @@ async function pageUsage() {
 }
 
 // shared helpers for rr.js
-window.SEO = { icon, LOCATIONS, LANGS, locSelect, langSelect, locName, renderDomainOverview, $, $$, esc, n, money, ago, shortUrl, toast, api, busy, chip, delta, spark, lineChart, clearCharts, css, drawer, mount, downloadCsv, volSpark, state, loadProjects, route };
+window.SEO = { icon, cityField, wireCity, LOCATIONS, LANGS, locSelect, langSelect, locName, renderDomainOverview, $, $$, esc, n, money, ago, shortUrl, toast, api, busy, chip, delta, spark, lineChart, clearCharts, css, drawer, mount, downloadCsv, volSpark, state, loadProjects, route };
 
 // ---------------- start ----------------
 async function start() {

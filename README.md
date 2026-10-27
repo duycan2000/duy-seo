@@ -76,7 +76,7 @@ Check real spend on the **API usage** page.
 - Depth matters: Google bills per 10 results, so Top 100 costs ~2× Top 50.
 - AI Mode and ChatGPT data are English-only; ChatGPT location falls back to the US where Vietnam isn't supported.
 - For Local SEO, use **Find the business on Google Maps** first: it saves the Maps CID, the most reliable match.
-- Single admin login. To add Google-account login instead, put the Worker behind Cloudflare Access.
+- Team accounts: Utilities → Users. Roles: admin (all + manage users), member (all tools), viewer (read-only). The owner signs in with ADMIN_PASSWORD and an empty email. Existing install: apply `schema-users.sql` once.
 
 ---
 

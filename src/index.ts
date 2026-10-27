@@ -1,19 +1,20 @@
 import { Hono } from "hono";
 import type { Env, Keyword, Project } from "./types";
-import { login, logout, requireAuth } from "./auth";
+import { login, logout, requireAuth, type SessionUser } from "./auth";
+import usersRoutes, { changeOwnPassword } from "./users";
 import { Dfs } from "./dfs";
 import { normDomain, splitList, sqlDate } from "./util";
 import { quickCheck, runKeyword } from "./modules/rank";
 import { aiMentionsIndex, runPrompt, type PromptRow } from "./modules/ai";
 import { findBusiness, runGrid, type GridRow } from "./modules/local";
 import { pollAudit, startAudit } from "./modules/audit";
-import { domainOverview, keywordOverview, keywordResearch } from "./modules/research";
+import { domainOverview, keywordOverview, keywordResearch, addLocalVolumes } from "./modules/research";
 import { collectPending, scheduled } from "./cron";
 import rrRoutes from "./rr/routes";
 import toolRoutes from "./tools/routes";
 import { ingestLead, twilioDial, twilioRecording, twilioStatus, twilioVoice } from "./rr/leads";
 
-type C = { Bindings: Env };
+type C = { Bindings: Env; Variables: { user: SessionUser } };
 const app = new Hono<C>();
 
 app.onError((err, c) => {
@@ -32,7 +33,9 @@ app.all("/hooks/*", (c) => c.json({ error: "Not found" }, 404));
 app.post("/api/login", login);
 app.post("/api/logout", logout);
 app.use("/api/*", requireAuth);
-app.get("/api/me", (c) => c.json({ ok: true, mode: c.env.DFS_MODE || "standard", sandbox: c.env.DFS_SANDBOX === "1" }));
+app.get("/api/me", (c) => c.json({ ok: true, user: c.get("user"), mode: c.env.DFS_MODE || "standard", sandbox: c.env.DFS_SANDBOX === "1" }));
+app.post("/api/me/password", changeOwnPassword);
+app.route("/api/users", usersRoutes);
 app.route("/api/rr", rrRoutes);
 app.route("/api/tools", toolRoutes);
 
@@ -394,7 +397,13 @@ app.get("/api/audits/:aid", async (c) => {
 app.post("/api/research/keywords", async (c) => {
   const b = await c.req.json<any>();
   if (!b.seed) return c.json({ error: "Enter a seed keyword." }, 400);
-  return c.json(await keywordResearch(c.env, b.seed, b.mode || "ideas", Number(b.location_code) || 2704, b.language_code || "en"));
+  const lang = b.language_code || "en";
+  const r: any = await keywordResearch(c.env, b.seed, b.mode || "ideas", Number(b.location_code) || 2036, lang);
+  if (Number(b.city_code) && r.items.length) {
+    r.city = String(b.city_name || "");
+    r.local_error = await addLocalVolumes(c.env, r.items, Number(b.city_code), lang);
+  }
+  return c.json(r);
 });
 
 app.post("/api/research/domain", async (c) => {

@@ -4,11 +4,12 @@ import type { Env } from "../types";
 import { mapLimit } from "../util";
 
 // ---------------- Bulk keyword metrics ----------------
-export async function bulkKeywordMetrics(env: Env, keywords: string[], location_code: number, language_code: string) {
+/** volume_code: optional city/region code — Google Ads volumes support it; difficulty stays country-level (Labs). */
+export async function bulkKeywordMetrics(env: Env, keywords: string[], location_code: number, language_code: string, volume_code?: number) {
   const list = [...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean))].slice(0, 1000);
   const loc = { location_code, language_code };
   const [volRows, kd, intent] = await Promise.all([
-    adsVolumes(env, list, location_code, language_code).catch((e) => ({ error: e.message })),
+    adsVolumes(env, list, volume_code || location_code, language_code).catch((e) => ({ error: e.message })),
     cachedLive(env, "dataforseo_labs/google/bulk_keyword_difficulty/live", { keywords: list, ...loc }).catch((e) => ({ error: e.message })),
     cachedLive(env, "dataforseo_labs/google/search_intent/live", { keywords: list, language_code }).catch((e) => ({ error: e.message })),
   ]);

@@ -1,6 +1,7 @@
 import { cachedLive } from "../dfs";
 import type { Env } from "../types";
 import { normDomain } from "../util";
+import { adsVolumes } from "../tools/keywords";
 
 function kwRow(item: any) {
   const kd = item.keyword_data || item;
@@ -28,6 +29,24 @@ export async function keywordResearch(env: Env, seed: string, mode: string, loca
   }
   const items = (res?.items || []).map(kwRow).filter((r: any) => r.keyword);
   return { total: res?.total_count ?? items.length, items };
+}
+
+/** Adds Google Ads search volume for a city/region (Labs ideas & difficulty are country-only). */
+export async function addLocalVolumes(env: Env, items: any[], city_code: number, language_code: string) {
+  // Google Ads rejects some characters; send clean keywords only
+  const ok = items.map((r) => r.keyword).filter((k: string) => k.length <= 80 && k.split(" ").length <= 10 && !/[^\p{L}\p{N}\s'&.-]/u.test(k));
+  try {
+    const rows = await adsVolumes(env, ok, city_code, language_code);
+    const m = new Map<string, any>(rows.map((r: any) => [String(r.keyword).toLowerCase(), r]));
+    for (const it of items) {
+      const r = m.get(it.keyword.toLowerCase());
+      it.local = r ? r.search_volume ?? 0 : null;
+      it.local_trend = r ? (r.monthly_searches || []).slice(0, 12).reverse().map((x: any) => x.search_volume) : null;
+    }
+    return rows.length ? null : "City volumes are still processing — search again in a minute.";
+  } catch (e: any) {
+    return `City volumes failed: ${e.message}`;
+  }
 }
 
 export async function keywordOverview(env: Env, keywords: string[], location_code: number, language_code: string) {
